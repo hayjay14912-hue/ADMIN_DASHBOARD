@@ -26,10 +26,15 @@ const emptyItem = {
 };
 
 const CLINICAL_CATEGORY_OPTIONS = [
-  { id: "111111111111111111111111", name: "Filler" },
-  { id: "222222222222222222222222", name: "Booster" },
-  { id: "333333333333333333333333", name: "Premium Products" },
-  { id: "444444444444444444444444", name: "Thread" },
+  { id: "700000000000000000000001", name: "Exosomes" },
+  { id: "700000000000000000000005", name: "Injectables" },
+  { id: "700000000000000000000004", name: "Chemical Peels" },
+  { id: "700000000000000000000002", name: "Fillers" },
+  { id: "700000000000000000000003", name: "Meso Serums" },
+  { id: "700000000000000000000007", name: "Skin Boosters" },
+  { id: "700000000000000000000006", name: "Threads" },
+  { id: "700000000000000000000009", name: "Devices and Tools" },
+  { id: "700000000000000000000008", name: "Premium Products" },
 ];
 
 const normalizeClinicalCategory = (entry) => {
@@ -340,7 +345,9 @@ const ClinicalProductForm = () => {
     if (!item.brand?.id || !item.brand?.name) errors.push("Brand is required");
     if (!item.category?.id || !item.category?.name) errors.push("Category is required");
     if (!normalizeClinicalCategory(item.category)) {
-      errors.push("Category must be one of Filler, Booster, Premium Products, or Thread");
+      errors.push(
+        "Category must be one of Exosomes, Injectables, Chemical Peels, Fillers, Meso Serums, Skin Boosters, Threads, Devices and Tools, or Premium Products"
+      );
     }
 
     if (!item.contactEmail && !item.whatsappNumber) {
