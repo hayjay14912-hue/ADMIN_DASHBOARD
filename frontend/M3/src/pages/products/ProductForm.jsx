@@ -18,7 +18,7 @@ const emptyProduct = {
   status: "in-stock",
   feature: false,
   featured: false,
-  productType: "",
+  productType: "beauty",
   description: "",
   imageURLs: [],
   bogoOffer: {
@@ -29,11 +29,47 @@ const emptyProduct = {
   },
 };
 
+const PRODUCT_CATEGORY_OPTIONS = [
+  "Tools",
+  "Microneedling",
+  "Meso Serums",
+  "BB Glow",
+  "Tools & Devices",
+  "Skin Care",
+  "Permanent Makeup",
+  "Chemical Peels",
+  "Exosomes",
+  "Fillers",
+  "Skinae Talks",
+];
+
+const CATEGORY_PARENT_MAP = {
+  Tools: "Tools",
+  Microneedling: "Tools",
+  "Meso Serums": "Skin Care",
+  "BB Glow": "Skin Care",
+  "Tools & Devices": "Tools",
+  "Skin Care": "Skin Care",
+  "Permanent Makeup": "Permanent Makeup",
+  "Chemical Peels": "Chemical Peels",
+  Exosomes: "Exosomes",
+  Fillers: "Fillers",
+  "Skinae Talks": "Skinae Talks",
+};
+
 const normalizeRef = (value) => ({
   name: String(value?.name || "").trim(),
   id: String(value?.id || "").trim(),
 });
 const normalizeType = (value) => String(value || "").trim().toLowerCase();
+const toDisplayCase = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 const normalizeBogoOffer = (value) => ({
   enabled: Boolean(value?.enabled),
   label: String(value?.label || "Buy 1 Get 1 FREE").trim() || "Buy 1 Get 1 FREE",
@@ -316,13 +352,24 @@ const ProductForm = () => {
         setProduct({
           ...emptyProduct,
           ...payload,
-          brand: normalizeRef(payload?.brand),
-          category: normalizeRef(payload?.category),
+          brand: {
+            ...normalizeRef(payload?.brand),
+            name: toDisplayCase(payload?.brand?.name || ""),
+            id: String(payload?.brand?.id || ""),
+          },
+          category: {
+            ...normalizeRef(payload?.category),
+            name: toDisplayCase(payload?.category?.name || payload?.children || ""),
+            id: String(payload?.category?.id || ""),
+          },
           feature: Boolean(payload?.feature ?? payload?.featured ?? false),
           featured: Boolean(payload?.feature ?? payload?.featured ?? false),
           unit: normalizedUnit,
           imageURLs: normalizeImageCollection(payload?.imageURLs),
           bogoOffer: normalizeBogoOffer(payload?.bogoOffer),
+          parent: toDisplayCase(payload?.parent || payload?.category?.name || ""),
+          children: toDisplayCase(payload?.children || payload?.category?.name || ""),
+          productType: String(payload?.productType || "beauty").trim().toLowerCase() || "beauty",
         });
         const start = toYMD(payload?.offerDate?.startDate) || "";
         const end = toYMD(payload?.offerDate?.endDate) || "";
@@ -389,6 +436,22 @@ const ProductForm = () => {
       setProduct((prev) => ({ ...prev, feature: nextFeature, featured: nextFeature }));
       return;
     }
+    if (name === "parent" || name === "children") {
+      const cleanValue = toDisplayCase(value);
+      setProduct((prev) => ({
+        ...prev,
+        [name]: cleanValue,
+        category:
+          name === "children"
+            ? { ...(prev.category || { id: "" }), name: cleanValue, id: "" }
+            : prev.category,
+      }));
+      return;
+    }
+    if (name === "productType") {
+      setProduct((prev) => ({ ...prev, productType: String(value || "").toLowerCase() }));
+      return;
+    }
     setProduct((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
@@ -414,60 +477,29 @@ const ProductForm = () => {
     }));
   };
 
-  const handleBrandSelect = (e) => {
-    const selectedBrandId = e.target.value;
-    const selectedBrand = brands.find(brand => {
-      const brandId = brand._id || brand.id || brand.uuid;
-      return brandId === selectedBrandId;
-    });
-    
-    console.log("Selected brand:", selectedBrand); // Debug log
-    
-    if (selectedBrand) {
-      const brandId = selectedBrand._id || selectedBrand.id || selectedBrand.uuid || "";
-      const brandName = selectedBrand.name || selectedBrand.brandName || selectedBrand.title || "";
-      
-      setProduct((prev) => ({
-        ...prev,
-        brand: {
-          name: brandName,
-          id: brandId
-        }
-      }));
-    } else {
-      setProduct((prev) => ({
-        ...prev,
-        brand: { name: "", id: "" }
-      }));
-    }
+  const handleBrandNameChange = (e) => {
+    const normalizedName = toDisplayCase(e.target.value);
+    setProduct((prev) => ({
+      ...prev,
+      brand: {
+        name: normalizedName,
+        id: "",
+      },
+    }));
   };
 
-  const handleCategorySelect = (e) => {
-    const selectedCategoryId = e.target.value;
-    const selectedCategory = categories.find(category => {
-      const categoryId = category._id || category.id || category.uuid;
-      return categoryId === selectedCategoryId;
-    });
-    
-    console.log("Selected category:", selectedCategory); // Debug log
-    
-    if (selectedCategory) {
-      const categoryId = selectedCategory._id || selectedCategory.id || selectedCategory.uuid || "";
-      const categoryName = selectedCategory.parent || selectedCategory.name || selectedCategory.categoryName || selectedCategory.title || "";
-      
-      setProduct((prev) => ({
-        ...prev,
-        category: {
-          name: categoryName,
-          id: categoryId
-        }
-      }));
-    } else {
-      setProduct((prev) => ({
-        ...prev,
-        category: { name: "", id: "" }
-      }));
-    }
+  const handleChildrenCategoryChange = (e) => {
+    const child = String(e.target.value || "").trim();
+    const resolvedParent = CATEGORY_PARENT_MAP[child] || child;
+    setProduct((prev) => ({
+      ...prev,
+      parent: resolvedParent,
+      children: child,
+      category: {
+        name: child,
+        id: "",
+      },
+    }));
   };
 
   const handleRemoveImage = (index) => {
@@ -546,9 +578,7 @@ const ProductForm = () => {
     if (!product.title?.trim()) errors.push("Title is required");
     if (!product.price || product.price <= 0) errors.push("Valid price is required");
     if (!product.brand?.name?.trim()) errors.push("Brand name is required");
-    if (!product.brand?.id?.trim()) errors.push("Brand ID is required");
     if (!product.category?.name?.trim()) errors.push("Category name is required");
-    if (!product.category?.id?.trim()) errors.push("Category ID is required");
     if (!product.children?.trim()) errors.push("Children field is required");
     if (!product.productType?.trim()) errors.push("Product type is required");
     
@@ -579,17 +609,20 @@ const ProductForm = () => {
         img: product.img,
         title: product.title,
         unit: product.unit,
-        parent: product.parent,
-        children: product.children,
+        parent: toDisplayCase(product.parent || CATEGORY_PARENT_MAP[product.children] || product.category?.name || ""),
+        children: toDisplayCase(product.children || product.category?.name || ""),
         price: product.price === "" ? undefined : Number(product.price),
         discount: product.discount === "" ? undefined : Number(product.discount),
         quantity: product.quantity === "" ? undefined : Number(product.quantity),
-        brand: { name: product.brand?.name || "", id: product.brand?.id || "" },
-        category: { name: product.category?.name || "", id: product.category?.id || "" },
+        brand: { name: toDisplayCase(product.brand?.name || ""), id: product.brand?.id || "" },
+        category: {
+          name: toDisplayCase(product.category?.name || product.children || ""),
+          id: product.category?.id || "",
+        },
         status: product.status,
         feature: Boolean(product.feature),
         featured: Boolean(product.feature),
-        productType: product.productType,
+        productType: String(product.productType || "beauty").trim().toLowerCase() || "beauty",
         description: product.description,
         imageURLs: normalizeImageCollection(product.imageURLs),
         bogoOffer: {
@@ -610,14 +643,15 @@ const ProductForm = () => {
       const payload = {
         ...payloadRaw,
         brand: {
-          name: product.brand?.name || "",
+          name: toDisplayCase(product.brand?.name || ""),
           id: product.brand?.id || ""
         },
         category: {
-          name: product.category?.name || "",
+          name: toDisplayCase(product.category?.name || product.children || ""),
           id: product.category?.id || ""
         },
-        children: product.children || "",
+        parent: toDisplayCase(product.parent || CATEGORY_PARENT_MAP[product.children] || product.category?.name || ""),
+        children: toDisplayCase(product.children || product.category?.name || ""),
         imageURLs: normalizeImageCollection(product.imageURLs),
       };
 
@@ -817,15 +851,33 @@ const ProductForm = () => {
               <div className="form-table">
                 <div className="form-row">
                   <div className="form-cell">Parent</div>
-                  <div className="form-cell"><input name="parent" placeholder="Parent" value={product.parent} onChange={handleChange} /></div>
+                  <div className="form-cell">
+                    <select name="parent" value={product.parent} onChange={handleChange}>
+                      <option value="">-- Select parent --</option>
+                      {Array.from(new Set(Object.values(CATEGORY_PARENT_MAP))).map((parentName) => (
+                        <option key={parentName} value={parentName}>
+                          {parentName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-cell">Children *</div>
-                  <div className="form-cell"><input name="children" placeholder="Children" value={product.children} onChange={handleChange} required /></div>
+                  <div className="form-cell">
+                    <select name="children" value={product.children} onChange={handleChildrenCategoryChange} required>
+                      <option value="">-- Select category --</option>
+                      {PRODUCT_CATEGORY_OPTIONS.map((entry) => (
+                        <option key={entry} value={entry}>
+                          {entry}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-cell">Product Type *</div>
-                  <div className="form-cell"><input name="productType" placeholder="grocery, electronics" value={product.productType} onChange={handleChange} required /></div>
+                  <div className="form-cell"><input name="productType" value={product.productType} onChange={handleChange} required /></div>
                 </div>
                 <div className="form-row">
                   <div className="form-cell">Status</div>
@@ -867,31 +919,26 @@ const ProductForm = () => {
                 <div className="form-row">
                   <div className="form-cell">Brand *</div>
                   <div className="form-cell">
-                    <select
-                      value={product.brand.id || ""}
-                      onChange={handleBrandSelect}
+                    <input
+                      name="brandName"
+                      value={product.brand?.name || ""}
+                      onChange={handleBrandNameChange}
+                      placeholder="Type brand name (auto-capitalized)"
+                      list="known-brands"
                       required
-                      disabled={loadingBrands}
-                    >
-                      <option value="">-- Select a brand --</option>
+                    />
+                    <datalist id="known-brands">
                       {brands.map((brand, index) => {
-                        const brandId = brand._id || brand.id || brand.uuid || `temp_${index}`;
-                        const brandName = brand.name || brand.brandName || brand.title || `Brand ${index + 1}`;
-                        console.log(`Brand ${index}:`, { brandId, brandName, fullBrand: brand });
-                        return (
-                          <option key={brandId} value={brandId}>
-                            {brandName}
-                          </option>
-                        );
+                        const brandName = brand.name || brand.brandName || brand.title || "";
+                        if (!brandName) return null;
+                        return <option key={`${brandName}-${index}`} value={toDisplayCase(brandName)} />;
                       })}
-                    </select>
+                    </datalist>
                     {loadingBrands && <span className="subtext">Loading brands...</span>}
-                    {!loadingBrands && brands.length === 0 && (
-                      <span className="subtext">No brands available. <a href="/admin/brands/new">Add a brand first</a></span>
-                    )}
-                    {!loadingBrands && brands.length > 0 && (
-                      <span className="subtext">Found {brands.length} brand(s).</span>
-                    )}
+                    <span className="subtext">
+                      No need to pre-add brand. Just type it here.
+                      {!loadingBrands && brands.length > 0 ? ` Existing refs: ${brands.length} brand(s).` : ""}
+                    </span>
                   </div>
                 </div>
                 {product.brand?.name && (
@@ -899,7 +946,7 @@ const ProductForm = () => {
                     <div className="form-cell">Selected Brand</div>
                     <div className="form-cell">
                       <span className="inline-badge">
-                        <strong>{product.brand.name}</strong> (ID: {product.brand.id})
+                        <strong>{toDisplayCase(product.brand.name)}</strong>
                       </span>
                     </div>
                   </div>
@@ -907,31 +954,19 @@ const ProductForm = () => {
                 <div className="form-row">
                   <div className="form-cell">Category *</div>
                   <div className="form-cell">
-                    <select
-                      value={product.category.id || ""}
-                      onChange={handleCategorySelect}
-                      required
-                      disabled={loadingCategories}
-                    >
+                    <select value={product.children || ""} onChange={handleChildrenCategoryChange} required disabled={loadingCategories}>
                       <option value="">-- Select a category --</option>
-                      {categories.map((category, index) => {
-                        const categoryId = category._id || category.id || category.uuid || `temp_${index}`;
-                        const categoryName = category.parent || category.name || category.categoryName || category.title || `Category ${index + 1}`;
-                        console.log(`Category ${index}:`, { categoryId, categoryName, fullCategory: category });
-                        return (
-                          <option key={categoryId} value={categoryId}>
-                            {categoryName}
-                          </option>
-                        );
-                      })}
+                      {PRODUCT_CATEGORY_OPTIONS.map((entry) => (
+                        <option key={`brand-cat-${entry}`} value={entry}>
+                          {entry}
+                        </option>
+                      ))}
                     </select>
-                    {loadingCategories && <span className="subtext">Loading categories...</span>}
-                    {!loadingCategories && categories.length === 0 && (
-                      <span className="subtext">No categories available. <a href="/admin/categories/new">Add a category first</a></span>
-                    )}
-                    {!loadingCategories && categories.length > 0 && (
-                      <span className="subtext">Found {categories.length} category(ies).</span>
-                    )}
+                    <span className="subtext">
+                      {loadingCategories
+                        ? "Loading category references..."
+                        : `Uses fixed dropdown list (${PRODUCT_CATEGORY_OPTIONS.length}) and keeps DB in sync.${categories.length ? ` Existing refs: ${categories.length} category(ies).` : ""}`}
+                    </span>
                   </div>
                 </div>
                 {product.category?.name && (
@@ -939,7 +974,7 @@ const ProductForm = () => {
                     <div className="form-cell">Selected Category</div>
                     <div className="form-cell">
                       <span className="inline-badge">
-                        <strong>{product.category.name}</strong> (ID: {product.category.id})
+                        <strong>{product.category.name}</strong>
                       </span>
                     </div>
                   </div>
