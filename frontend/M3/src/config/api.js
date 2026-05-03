@@ -1,6 +1,6 @@
 const rawBaseUrl =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://hasnat-backend-iota.vercel.app/api";
+  "https://hasnat-backend-v2.vercel.app/api";
 
 const trimmedBaseUrl = rawBaseUrl.replace(/\/$/, "");
 
